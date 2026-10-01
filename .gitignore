@@ -1,0 +1,12 @@
+AutoLoginTool_dist/
+AutoLoginTool/venv/
+AutoLoginTool/build/
+AutoLoginTool/dist/
+AutoLoginTool/__pycache__/
+AutoLoginTool/*.spec
+*.bat
+!build.bat
+!build_no_pause.bat
+*.pyc
+.vscode/
+.idea/
