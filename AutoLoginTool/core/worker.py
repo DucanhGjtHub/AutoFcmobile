@@ -63,7 +63,8 @@ class AutoLoginWorker(QThread):
                 # Lấy tài khoản từ Queue, chờ 1s để còn kiểm tra vòng lặp is_running
                 account = self.account_queue.get(timeout=1)
             except queue.Empty:
-                self.worker_update.emit(self.device_id, "", "", "Trống")
+                # Do not erase email/password on empty, just update status
+                self.worker_update.emit(self.device_id, "KEEPLAST", "KEEPLAST", "Trống (Đã xong)")
                 break # Queue trống -> Hết tài khoản -> thoát luồng
             
             email = account['email']
@@ -80,7 +81,7 @@ class AutoLoginWorker(QThread):
                 self.account_done.emit(email, "Failed B1")
                 self.account_queue.task_done()
                 continue
-            time.sleep(2)
+            time.sleep(0.5)
             
             # B2: chờ b2.png, bấm b2.png
             if not self.wait_and_click("b2.png", screen_path):
@@ -89,16 +90,16 @@ class AutoLoginWorker(QThread):
                 self.account_done.emit(email, "Failed B2")
                 self.account_queue.task_done()
                 continue
-            time.sleep(2)
+            time.sleep(0.5)
             
-            # B3: Tìm b3.png (ô tài khoản). Nếu không thấy (timeout 5s) thì coi như đang ở sẵn trong ô nhập.
-            self.log_msg.emit(f"[{self.device_id}] Đang chờ b3.png (5s)...")
-            pos_b3 = self.wait_for_image("b3.png", screen_path, timeout=5)
+            # B3: Tìm b3.png (ô tài khoản). Nếu không thấy thì xoá tk cũ luôn (giảm timeout từ 5s xuống 1s)
+            self.log_msg.emit(f"[{self.device_id}] Đang chờ b3.png (1s)...")
+            pos_b3 = self.wait_for_image("b3.png", screen_path, timeout=1)
             if pos_b3:
                 self.adb.tap(self.device_id, pos_b3[0], pos_b3[1])
                 time.sleep(1)
             else:
-                self.log_msg.emit(f"[{self.device_id}] Không thấy b3.png, giả định đang ở sẵn ô nhập tk...")
+                self.log_msg.emit(f"[{self.device_id}] Không thấy b3.png, tiến hành xoá tk cũ...")
             
             # LUÔN xoá trắng (phòng trường hợp có tk cũ) - xoá 50 ký tự vì email rất dài
             self.adb.clear_text(self.device_id, 50)
@@ -107,7 +108,7 @@ class AutoLoginWorker(QThread):
             # Nhập tài khoản (email)
             self.log_msg.emit(f"[{self.device_id}] Đang nhập tài khoản...")
             self.adb.input_text(self.device_id, email)
-            time.sleep(2)
+            time.sleep(0.5)
             
             # B4: chờ b4.png, bấm b4.png
             if not self.wait_and_click("b4.png", screen_path):
@@ -116,7 +117,7 @@ class AutoLoginWorker(QThread):
                 self.account_done.emit(email, "Failed B4")
                 self.account_queue.task_done()
                 continue
-            time.sleep(2)
+            time.sleep(0.5)
             
             # LUÔN xoá trắng mật khẩu cũ (nếu có)
             self.adb.clear_text(self.device_id, 50)
@@ -125,7 +126,7 @@ class AutoLoginWorker(QThread):
             # Nhập mật khẩu
             self.log_msg.emit(f"[{self.device_id}] Đang nhập mật khẩu...")
             self.adb.input_text(self.device_id, password)
-            time.sleep(2)
+            time.sleep(0.5)
             
             # B5: chờ b5.png, bấm b5.png
             if not self.wait_and_click("b5.png", screen_path):
@@ -164,7 +165,7 @@ class AutoLoginWorker(QThread):
                 self.adb.clear_text(self.device_id, 50)
                 time.sleep(1)
                 self.adb.input_text(self.device_id, password)
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 # Bấm lại B5
                 self.wait_and_click("b5.png", screen_path, timeout=3)

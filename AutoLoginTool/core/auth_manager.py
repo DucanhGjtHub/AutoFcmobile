@@ -14,10 +14,16 @@ class AuthManager:
         
     def get_hwid(self):
         try:
-            hwid = subprocess.check_output('wmic csproduct get uuid', creationflags=0x08000000).decode().split('\n')[1].strip()
-            return hwid
+            import uuid
+            mac = str(uuid.getnode())
+            sys_uuid = subprocess.check_output('wmic csproduct get uuid', creationflags=0x08000000).decode().split('\n')[1].strip()
+            mb = subprocess.check_output('wmic baseboard get serialnumber', creationflags=0x08000000).decode().split('\n')[1].strip()
+            combined = f"{sys_uuid}-{mb}-{mac}"
+            import hashlib
+            return hashlib.md5(combined.encode()).hexdigest()
         except:
-            return "UNKNOWN_HWID"
+            import uuid
+            return str(uuid.getnode())
 
     def get_pc_specs(self):
         try:

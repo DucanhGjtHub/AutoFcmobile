@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QTextEdit, QLabel, QTableWidget, 
                              QTableWidgetItem, QFileDialog, QMessageBox, QGroupBox,
-                             QSpinBox)
+                             QSpinBox, QHeaderView)
 from PyQt5.QtCore import Qt
 import queue
 import os
@@ -141,6 +141,11 @@ class MainWindow(QMainWindow):
         self.table_emu.setColumnCount(6)
         self.table_emu.setHorizontalHeaderLabels(["#", "Title", "Connection", "Email", "Password", "Status"])
         self.table_emu.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # Đảm bảo hiển thị đầy đủ Email và Password
+        self.table_emu.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table_emu.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
         self.table_emu.horizontalHeader().setStretchLastSection(True)
         main_layout.addWidget(self.table_emu, 3)
         
@@ -181,6 +186,7 @@ class MainWindow(QMainWindow):
     def sync_spin_to(self):
         # Đảm bảo Từ acc đến Đến acc có số lượng đúng bằng Số tab chạy
         self.spin_to.setValue(self.spin_from.value() + self.spin_threads.value() - 1)
+        self.update_preview_table()
 
     def batch_next(self):
         step = self.spin_threads.value()
@@ -208,6 +214,7 @@ class MainWindow(QMainWindow):
             self.log(f"-> Đã tải và lưu {count} tài khoản từ đoạn văn bản.")
             self.txt_accounts.clear()
             self.update_total_label()
+            self.update_preview_table()
 
     def add_from_excel(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Chọn file Excel", "", "Excel Files (*.xlsx *.xls)")
@@ -215,6 +222,7 @@ class MainWindow(QMainWindow):
             count = self.acc_mgr.add_from_excel(file_path)
             self.log(f"-> Đã tải và lưu {count} tài khoản từ file excel.")
             self.update_total_label()
+            self.update_preview_table()
 
     def clear_accounts(self):
         reply = QMessageBox.question(self, 'Xác nhận', 'Bạn có chắc muốn xóa tất cả tài khoản đã lưu?', QMessageBox.Yes | QMessageBox.No)
@@ -222,6 +230,7 @@ class MainWindow(QMainWindow):
             self.acc_mgr.clear_accounts()
             self.update_total_label()
             self.log("-> Đã xóa sạch tài khoản.")
+            self.update_preview_table()
 
     def scan_devices(self):
         devices = self.adb_mgr.get_devices()
@@ -251,7 +260,27 @@ class MainWindow(QMainWindow):
             self.log(f"-> Đã quét thấy {len(devices)} thiết bị đang bật.")
         else:
             self.log("-> Không tìm thấy thiết bị nào.")
+        self.update_preview_table()
         return devices
+
+    def update_preview_table(self):
+        if not self.device_row_map:
+            return
+            
+        devices = sorted(list(self.device_row_map.keys()))
+        all_accs = self.acc_mgr.get_accounts()
+        start_idx = self.spin_from.value() - 1
+        end_idx = self.spin_to.value()
+        
+        accs_to_show = all_accs[start_idx:end_idx] if all_accs else []
+        max_threads = self.spin_threads.value()
+        
+        for i, dev in enumerate(devices[:max_threads]):
+            if i < len(accs_to_show):
+                acc = accs_to_show[i]
+                self.on_worker_update(dev, acc['email'], acc['password'], "Ready")
+            else:
+                self.on_worker_update(dev, "", "", "Ready")
 
     def connect_adb(self):
         self.adb_mgr.connect()
@@ -293,6 +322,14 @@ class MainWindow(QMainWindow):
         self.auto_stopped = False
         self.workers = []
         
+        # PREPOPULATE THÔNG TIN LÊN BẢNG REALTIME NGAY KHI BẮT ĐẦU
+        for i, dev in enumerate(active_devices):
+            if i < len(accs_to_run):
+                acc = accs_to_run[i]
+                self.on_worker_update(dev, acc['email'], acc['password'], "Đang chờ chạy...")
+            else:
+                self.on_worker_update(dev, "", "", "Trống")
+        
         for dev in active_devices:
             worker = AutoLoginWorker(dev, self.acc_queue, self.adb_mgr, self.img_matcher)
             worker.log_msg.connect(self.log)
@@ -316,8 +353,16 @@ class MainWindow(QMainWindow):
     def on_worker_update(self, device_id, email, password, status):
         if device_id in self.device_row_map:
             row = self.device_row_map[device_id]
-            self.table_emu.setItem(row, 3, QTableWidgetItem(email))
-            self.table_emu.setItem(row, 4, QTableWidgetItem(password))
+            if email and email != "KEEPLAST":
+                self.table_emu.setItem(row, 3, QTableWidgetItem(email))
+            elif email == "":
+                self.table_emu.setItem(row, 3, QTableWidgetItem(""))
+                
+            if password and password != "KEEPLAST":
+                self.table_emu.setItem(row, 4, QTableWidgetItem(password))
+            elif password == "":
+                self.table_emu.setItem(row, 4, QTableWidgetItem(""))
+                
             self.table_emu.setItem(row, 5, QTableWidgetItem(status))
 
     def on_worker_finished(self, device_id):
