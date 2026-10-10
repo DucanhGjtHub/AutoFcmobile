@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         self.workers = []
         self.acc_queue = queue.Queue()
         self.device_row_map = {}
+        self.last_source_msg = ""
         
         self.init_ui()
         self.load_config()
@@ -164,6 +165,7 @@ class MainWindow(QMainWindow):
                     self.spin_threads.setValue(data.get("threads", 20))
                     self.spin_from.setValue(data.get("from_acc", 1))
                     self.spin_to.setValue(data.get("to_acc", 20))
+                    self.last_source_msg = data.get("last_source", "")
             except:
                 pass
 
@@ -174,7 +176,8 @@ class MainWindow(QMainWindow):
                 json.dump({
                     "threads": self.spin_threads.value(),
                     "from_acc": self.spin_from.value(),
-                    "to_acc": self.spin_to.value()
+                    "to_acc": self.spin_to.value(),
+                    "last_source": getattr(self, "last_source_msg", "")
                 }, f)
         except:
             pass
@@ -203,32 +206,39 @@ class MainWindow(QMainWindow):
         self.txt_log.append(msg)
         self.txt_log.verticalScrollBar().setValue(self.txt_log.verticalScrollBar().maximum())
 
-    def update_total_label(self):
+    def update_total_label(self, source_msg=None):
+        if source_msg is not None:
+            self.last_source_msg = source_msg
+            
         accounts = self.acc_mgr.get_accounts()
-        self.lbl_total.setText(f"Tổng số ních đã lưu: {len(accounts)}")
+        text = f"Tổng số ních: {len(accounts)}"
+        if self.last_source_msg:
+            text += f" ({self.last_source_msg})"
+        self.lbl_total.setText(text)
 
     def add_from_text(self):
         text = self.txt_accounts.toPlainText()
         if text:
             count = self.acc_mgr.add_from_text(text)
-            self.log(f"-> Đã tải và lưu {count} tài khoản từ đoạn văn bản.")
+            self.log(f"-> Đã xoá nick cũ, tải và lưu mới {count} tài khoản từ đoạn văn bản.")
             self.txt_accounts.clear()
-            self.update_total_label()
+            self.update_total_label("Thêm từ Text")
             self.update_preview_table()
 
     def add_from_excel(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Chọn file Excel", "", "Excel Files (*.xlsx *.xls)")
         if file_path:
             count = self.acc_mgr.add_from_excel(file_path)
-            self.log(f"-> Đã tải và lưu {count} tài khoản từ file excel.")
-            self.update_total_label()
+            self.log(f"-> Đã xoá nick cũ, tải và lưu mới {count} tài khoản từ file excel.")
+            filename = os.path.basename(file_path)
+            self.update_total_label(f"File: {filename}")
             self.update_preview_table()
 
     def clear_accounts(self):
         reply = QMessageBox.question(self, 'Xác nhận', 'Bạn có chắc muốn xóa tất cả tài khoản đã lưu?', QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.acc_mgr.clear_accounts()
-            self.update_total_label()
+            self.update_total_label("") # Reset last_source_msg
             self.log("-> Đã xóa sạch tài khoản.")
             self.update_preview_table()
 
@@ -375,5 +385,3 @@ class MainWindow(QMainWindow):
             self.log("===== TẤT CẢ CÁC LUỒNG ĐÃ DỪNG =====")
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
-            if not getattr(self, 'auto_stopped', False):
-                self.batch_next()

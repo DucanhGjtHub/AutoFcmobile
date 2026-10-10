@@ -26,6 +26,7 @@ class AccountManager:
             json.dump(self.accounts, f, indent=4)
 
     def add_from_text(self, text):
+        self.accounts = [] # Xóa nick cũ
         lines = text.strip().split('\n')
         count = 0
         for line in lines:
@@ -41,6 +42,7 @@ class AccountManager:
         return count
 
     def add_from_excel(self, file_path):
+        self.accounts = [] # Xóa nick cũ
         count = 0
         try:
             wb = openpyxl.load_workbook(file_path)
